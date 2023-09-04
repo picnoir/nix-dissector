@@ -1,0 +1,27 @@
+{
+  "nodes": {
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1693832517,
+        "narHash": "sha256-Fz1r73mrpGsnkbHvGotxW6v/gVsnieI7poLJ/JbU2to=",
+        "owner": "Ninjatrappeur",
+        "repo": "nixpkgs",
+        "rev": "2966ff4b76ef80e4e68588967ca73293b4a84f6d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Ninjatrappeur",
+        "ref": "nin/wireshark-dev-fix",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

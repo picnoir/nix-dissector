@@ -7,8 +7,7 @@
 
   outputs = { self, nixpkgs }: {
 
-    packages.x86_64-linux.nix-dissector = import ./default.nix { inherit (nixpkgs.legacyPackages.x86_64-linux) pkgs; };
-
-    devShells.x86_64-linux.default = self.packages.x86_64-linux.nix-dissector;
+    packages.x86_64-linux.snoop-nix-daemon = import ./default.nix { inherit (nixpkgs.legacyPackages.x86_64-linux) pkgs; };
+    packages.x86_64-linux.default = self.packages.x86_64-linux.snoop-nix-daemon;
   };
 }

@@ -15,7 +15,7 @@ local op_name_field = ProtoField.string("nix.opname", "Operation Name")
 
 local op_addtostore = ProtoField.bytes("nix.addtostore", "Add to store operation")
 local op_addtostore_name = ProtoField.string("nix.addtostore.name", "Add to store name")
-local op_camstr_name = ProtoField.string("nix.camstr.name", "Add to store camstr")
+local op_addtostore_camstr = ProtoField.string("nix.camstr.name", "Add to store camstr")
 
 nix_proto.fields = {
    dst_field,
@@ -31,7 +31,7 @@ nix_proto.fields = {
    op_name_field,
    op_addtostore,
    op_addtostore_name,
-   op_camstr_name
+   op_addtostore_camstr
 }
 
 local op_table = {
@@ -97,20 +97,42 @@ function parse_daemon_hello(tvb, pinfo, tree, offset)
    return offset + 8
 end
 
+-- Reads a Nix daemon string from tvb.
+-- The Nix daemon strings are composed of two fields:
+-- 1. The size of the string (8 bytes)
+-- 2. The string itself, 8-aligned (padding with \0), non null
+--    terminated.
 function read_string(tvb, pinfo, tree, offset)
+   local str
+
    -- Read size (u_size)
    local size = tvb(offset,4):le_int()
    local offset = offset + 8
 
-   -- Read string
-   local str = tvb(offset,size):string()
-
-   -- Apply 8-aligned padding.
-   if size % 8 then
-      size = size + (8 - (size % 8))
+   -- Strings are 8-aligned. We need to discard the potential padding.
+   if (size % 8) ~= 0 then
+      -- Parting the string. They are null-padded, so we'll get a the
+      -- null terminaison wireshark is expecting for free.
+      str = tvb(offset,size):string()
+      offset = offset + (size + ((8 - (size % 8))))
+   else
+      -- The string is already 8-aligned. This is a bit annoying:
+      -- Wireshark expects the strings to be null terminated. Nix
+      -- daemon is not null-terminating the strings it sends to the
+      -- wire.
+      --
+      -- We have to extract the string to a new tvb to append a null
+      -- byte at the end. We can then send this new null-terminated
+      -- string to wireshark.
+      --
+      -- Note: the offset indexes the original tvb, not the
+      -- temporarily created one. There's no need to take this new
+      -- null bit into account.
+      local tvb_clone = tvb:bytes(offset, size + 1)
+      tvb_clone:set_index(size, 0)
+      str = tvb_clone(0,size+1):tvb():range(0,size+1):string()
+      offset = offset + size
    end
-
-   offset = offset + size
 
    return offset, str
 end
@@ -124,7 +146,7 @@ function parse_add_to_store(tvb, pinfo, tree, offset)
 
    local subtree = tree:add(op_addtostore, tvb(initoffset, offset - initoffset))
    subtree:add(op_addtostore_name, tvb(initoffset, offsetname - initoffset), name)
-   subtree:add(op_addtostore_name, tvb(offsetname, offset - offsetname), camstr)
+   subtree:add(op_addtostore_camstr, tvb(offsetname, offset - offsetname), camstr)
 
    return offset
 end

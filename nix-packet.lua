@@ -15,7 +15,10 @@ local op_name_field = ProtoField.string("nix.opname", "Operation Name")
 
 local op_addtostore = ProtoField.bytes("nix.addtostore", "Add to store operation")
 local op_addtostore_name = ProtoField.string("nix.addtostore.name", "Add to store name")
-local op_addtostore_camstr = ProtoField.string("nix.camstr.name", "Add to store camstr")
+local op_addtostore_camstr = ProtoField.string("nix.addtostore.camstr", "Add to store camstr")
+local op_addtostore_nb_references = ProtoField.uint64("nix.addtostore.nbreferences", "Number of References")
+local op_addtostore_reference = ProtoField.string("nix.addtostore.reference", "Reference")
+local op_addtostore_repairflag = ProtoField.bool("nix.addtostore.repairflag", "Repair Flag")
 
 nix_proto.fields = {
    dst_field,
@@ -31,7 +34,10 @@ nix_proto.fields = {
    op_name_field,
    op_addtostore,
    op_addtostore_name,
-   op_addtostore_camstr
+   op_addtostore_camstr,
+   op_addtostore_nb_references,
+   op_addtostore_reference,
+   op_addtostore_repairflag,
 }
 
 local op_table = {
@@ -109,12 +115,13 @@ function read_string(tvb, pinfo, tree, offset)
    local size = tvb(offset,4):le_int()
    local offset = offset + 8
 
+
    -- Strings are 8-aligned. We need to discard the potential padding.
    if (size % 8) ~= 0 then
       -- Parting the string. They are null-padded, so we'll get a the
       -- null terminaison wireshark is expecting for free.
       str = tvb(offset,size):string()
-      offset = offset + (size + ((8 - (size % 8))))
+      offset = offset + (size + (8 - (size % 8)))
    else
       -- The string is already 8-aligned. This is a bit annoying:
       -- Wireshark expects the strings to be null terminated. Nix
@@ -139,14 +146,26 @@ end
 
 function parse_add_to_store(tvb, pinfo, tree, offset)
    local initoffset = offset
-   local offsetname = 0
 
-   offsetname, name = read_string(tvb, pinfo, tree, offset)
-   offset, camstr = read_string(tvb, pinfo, tree, offsetname)
+   offsetname, name  = read_string(tvb, pinfo, tree, offset)
+   offset, camstr  = read_string(tvb, pinfo, tree, offsetname)
 
    local subtree = tree:add(op_addtostore, tvb(initoffset, offset - initoffset))
    subtree:add(op_addtostore_name, tvb(initoffset, offsetname - initoffset), name)
    subtree:add(op_addtostore_camstr, tvb(offsetname, offset - offsetname), camstr)
+
+   local nb_references = tvb(offset,4):le_int()
+   subtree:add_le(op_addtostore_nb_references, tvb(offset,8))
+   offset = offset + 8
+   for i=1, nb_references do
+      local reference
+      local prevoffset = offset
+      offset, reference = read_string(tvb, pinfo, tree, offset)
+      subtree:add(op_addtostore_reference, tvb(prevoffset, offset - prevoffset), reference)
+   end
+
+   local repairflag = subtree:add(op_addtostore_repairflag, tvb(offset, 1))
+   offset = offset + 8
 
    return offset
 end

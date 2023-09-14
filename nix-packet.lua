@@ -13,6 +13,10 @@ local daemon_hello_version_field = ProtoField.uint64("nix.daemonhello.protolvers
 
 local op_name_field = ProtoField.string("nix.opname", "Operation Name")
 
+local op_addtostore = ProtoField.bytes("nix.addtostore", "Add to store operation")
+local op_addtostore_name = ProtoField.string("nix.addtostore.name", "Add to store name")
+local op_camstr_name = ProtoField.string("nix.camstr.name", "Add to store camstr")
+
 nix_proto.fields = {
    dst_field,
    src_field,
@@ -24,7 +28,10 @@ nix_proto.fields = {
    daemon_hello_field,
    daemon_hello_magic_field,
    daemon_hello_version_field,
-   op_name_field
+   op_name_field,
+   op_addtostore,
+   op_addtostore_name,
+   op_camstr_name
 }
 
 local op_table = {
@@ -90,8 +97,46 @@ function parse_daemon_hello(tvb, pinfo, tree, offset)
    return offset + 8
 end
 
+function read_string(tvb, pinfo, tree, offset)
+   -- Read size (u_size)
+   local size = tvb(offset,4):le_int()
+   local offset = offset + 8
+
+   -- Read string
+   local str = tvb(offset,size):string()
+
+   -- Apply 8-aligned padding.
+   if size % 8 then
+      size = size + (8 - (size % 8))
+   end
+
+   offset = offset + size
+
+   return offset, str
+end
+
+function parse_add_to_store(tvb, pinfo, tree, offset)
+   local initoffset = offset
+   local offsetname = 0
+
+   offsetname, name = read_string(tvb, pinfo, tree, offset)
+   offset, camstr = read_string(tvb, pinfo, tree, offsetname)
+
+   local subtree = tree:add(op_addtostore, tvb(initoffset, offset - initoffset))
+   subtree:add(op_addtostore_name, tvb(initoffset, offsetname - initoffset), name)
+   subtree:add(op_addtostore_name, tvb(offsetname, offset - offsetname), camstr)
+
+   return offset
+end
+
 function parse_op(tvb, pinfo, tree, offset, op)
    tree:add(op_name_field, tvb(offset, 8), op_table[op])
+   offset = offset + 8
+
+   if op_table[op] == "AddToStore" then
+      offset = parse_add_to_store(tvb, pinfo, tree, offset)
+   end
+   return offset
 end
 
 

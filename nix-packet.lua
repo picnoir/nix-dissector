@@ -169,7 +169,8 @@ function read_string(tvb, pinfo, tree, offset)
       -- Note: the offset indexes the original tvb, not the
       -- temporarily created one. There's no need to take this new
       -- null bit into account.
-      local tvb_clone = tvb:bytes(offset, size + 1)
+      local tvb_clone = tvb:bytes(offset, size)
+      tvb_clone:set_size(size + 1)
       tvb_clone:set_index(size, 0)
       str = tvb_clone(0,size+1):tvb():range(0,size+1):string()
       offset = offset + size

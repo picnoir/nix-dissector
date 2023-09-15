@@ -19,6 +19,10 @@ local op_addtostore_camstr = ProtoField.string("nix.addtostore.camstr", "Add to 
 local op_addtostore_nb_references = ProtoField.uint64("nix.addtostore.nbreferences", "Number of References")
 local op_addtostore_reference = ProtoField.string("nix.addtostore.reference", "Reference")
 local op_addtostore_repairflag = ProtoField.bool("nix.addtostore.repairflag", "Repair Flag")
+local op_addtostore_payload = ProtoField.bytes("nix.addtostore.payload", "Request Payload")
+local op_addtostore_response = ProtoField.bytes("nix.addtostore.response", "Response")
+
+op_addtostore_step = 0
 
 nix_proto.fields = {
    dst_field,
@@ -38,6 +42,8 @@ nix_proto.fields = {
    op_addtostore_nb_references,
    op_addtostore_reference,
    op_addtostore_repairflag,
+   op_addtostore_payload,
+   op_addtostore_response,
 }
 
 local op_table = {
@@ -165,9 +171,23 @@ function parse_add_to_store(tvb, pinfo, tree, offset)
    end
 
    local repairflag = subtree:add(op_addtostore_repairflag, tvb(offset, 1))
+
    offset = offset + 8
+   op_addtostore_step = 2
 
    return offset
+end
+
+function process_op_addtostore_step(tvb, pinfo, tree, offset)
+   if op_addtostore_step == 2 then
+      local subtree = tree:add(op_addtostore, tvb(offset, tvb:len() - offset))
+      subtree:add(op_addtostore_payload, tvb(offset, tvb:len() - offset))
+   elseif op_addtostore_step == 1 then
+      local subtree = tree:add(op_addtostore, tvb(offset, tvb:len() - offset))
+      subtree:add(op_addtostore_response, tvb(offset, tvb:len() - offset))
+   end
+
+   op_addtostore_step = op_addtostore_step - 1
 end
 
 function parse_op(tvb, pinfo, tree, offset, op)
@@ -191,7 +211,10 @@ function nix_proto.dissector(tvb, pinfo, tree)
    offset = offset + 8
 
    local first_word = tvb(offset, 4):le_uint()
-   if first_word == 0x6e697863 then
+
+   if op_addtostore_step > 0 then
+      process_op_addtostore_step(tvb, pinfo, subtree, offset)
+   elseif first_word == 0x6e697863 then
       offset = parse_client_hello(tvb, pinfo, subtree, offset)
    elseif first_word == 0x6478696f then
       offset = parse_daemon_hello(tvb, pinfo, subtree, offset)

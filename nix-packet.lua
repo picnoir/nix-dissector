@@ -22,6 +22,20 @@ local op_addtostore_repairflag = ProtoField.bool("nix.addtostore.repairflag", "R
 local op_addtostore_payload = ProtoField.bytes("nix.addtostore.payload", "Request Payload")
 local op_addtostore_response = ProtoField.bytes("nix.addtostore.response", "Response")
 
+local op_setoptions = ProtoField.bytes("nix.setoptions", "Set connection options")
+local op_setoptions_keepfailed = ProtoField.bool("nix.setoptions.keepfailed", "Keep the failed build directory")
+local op_setoptions_keepgoing = ProtoField.bool("nix.setoptions.keepgoing", "Keep on going after a failed build")
+local op_setoptions_tryfallback = ProtoField.bool("nix.setoptions.tryfallback", "Fallback")
+local op_setoptions_verbosity = ProtoField.uint64("nix.setoptions.verbosity", "Verbosity")
+local op_setoptions_maxbuildjobs = ProtoField.uint64("nix.setoptions.maxbuildjobs", "Max build jobs")
+local op_setoptions_maxsilenttime = ProtoField.uint64("nix.setoptions.maxsilenttime", "Max Silent Time")
+local op_setoptions_verbosebuild = ProtoField.uint64("nix.setoptions.verbosebuild", "Verbosity level")
+local op_setoptions_buildcores = ProtoField.uint64("nix.setoptions.buildcores", "NB Build cores")
+local op_setoptions_usesubstitutes = ProtoField.bool("nix.setoptions.usesubstitutes", "Use substitutes")
+local op_setoptions_nbclientoverrides = ProtoField.uint64("nix.setoptions.nbclientoverrides", "Nb Client Overrides")
+local op_setoptions_clientoverridename = ProtoField.uint64("nix.setoptions.clientoverridename", "Client Override key")
+local op_setoptions_clientoverridevalue = ProtoField.uint64("nix.setoptions.clientoverridevalue", "Client Override Value")
+
 op_addtostore_step = 0
 
 nix_proto.fields = {
@@ -44,6 +58,20 @@ nix_proto.fields = {
    op_addtostore_repairflag,
    op_addtostore_payload,
    op_addtostore_response,
+
+   op_setoptions,
+   op_setoptions_keepfailed,
+   op_setoptions_keepgoing,
+   op_setoptions_tryfallback,
+   op_setoptions_verbosity,
+   op_setoptions_maxbuildjobs,
+   op_setoptions_maxsilenttime,
+   op_setoptions_verbosebuild,
+   op_setoptions_buildcores,
+   op_setoptions_usesubstitutes,
+   op_setoptions_nbclientoverrides,
+   op_setoptions_clientoverridename,
+   op_setoptions_clientoverridevalue,
 }
 
 local op_table = {
@@ -190,12 +218,71 @@ function process_op_addtostore_step(tvb, pinfo, tree, offset)
    op_addtostore_step = op_addtostore_step - 1
 end
 
+function parse_set_options(tvb, pinfo, tree, offset)
+   local subtree = tree:add(op_setoptions, tvb(offset, tvb:len() - offset))
+
+   subtree:add(op_setoptions_keepfailed, tvb(offset, 1))
+   offset = offset + 8
+
+   subtree:add(op_setoptions_keepgoing, tvb(offset, 1))
+   offset = offset + 8
+
+   subtree:add(op_setoptions_tryfallback, tvb(offset, 1))
+   offset = offset + 8
+
+   subtree:add_le(op_setoptions_verbosity, tvb(offset, 8))
+   offset = offset + 8
+
+   subtree:add_le(op_setoptions_maxbuildjobs, tvb(offset, 8))
+   offset = offset + 8
+
+   subtree:add_le(op_setoptions_maxsilenttime, tvb(offset, 8))
+   offset = offset + 8
+
+   -- Obsolete useBuildHook
+   offset = offset + 8
+
+   subtree:add_le(op_setoptions_verbosebuild, tvb(offset, 8))
+   offset = offset + 8
+
+   -- Obsolete logtype
+   offset = offset + 8
+
+   -- Obsolete printBuildTrace
+   offset = offset + 8
+
+   subtree:add_le(op_setoptions_buildcores, tvb(offset, 8))
+   offset = offset + 8
+
+   subtree:add(op_setoptions_usesubstitutes, tvb(offset, 1))
+   offset = offset + 8
+
+   local nb_client_overrides = tvb(offset, 4):le_int()
+   subtree:add_le(op_setoptions_nbclientoverrides, tvb(offset, 8))
+   offset = offset + 8
+
+   for i=1, nb_client_overrides do
+      local initoffset = offset
+      local nameoffset
+      local name
+      local value
+      nameoffset, name = read_string(tvb, pinfo, tree, offset)
+      offset, value = read_string(tvb, pinfo, tree, offset)
+      subtree:add(op_setoptions_clientoverridename, tvb(initoffset, nameoffset - initoffset), name)
+      subtree:add(op_setoptions_clientoverridevalue, tvb(initoffset, offset - nameoffset), value)
+   end
+
+   return offset
+end
+
 function parse_op(tvb, pinfo, tree, offset, op)
    tree:add(op_name_field, tvb(offset, 8), op_table[op])
    offset = offset + 8
 
    if op_table[op] == "AddToStore" then
       offset = parse_add_to_store(tvb, pinfo, tree, offset)
+   elseif op_table[op] == "SetOptions" then
+      offset = parse_set_options(tvb, pinfo, tree, offset)
    end
    return offset
 end

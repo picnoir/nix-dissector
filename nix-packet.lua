@@ -36,6 +36,8 @@ local op_setoptions_nbclientoverrides = ProtoField.uint64("nix.setoptions.nbclie
 local op_setoptions_clientoverridename = ProtoField.uint64("nix.setoptions.clientoverridename", "Client Override key")
 local op_setoptions_clientoverridevalue = ProtoField.uint64("nix.setoptions.clientoverridevalue", "Client Override Value")
 
+local op_is_valid_path = ProtoField.string("nix.isvalidpath", "isvalidpath request")
+
 op_addtostore_step = 0
 
 nix_proto.fields = {
@@ -72,6 +74,8 @@ nix_proto.fields = {
    op_setoptions_nbclientoverrides,
    op_setoptions_clientoverridename,
    op_setoptions_clientoverridevalue,
+
+   op_is_valid_path
 }
 
 local op_table = {
@@ -276,6 +280,14 @@ function parse_set_options(tvb, pinfo, tree, offset)
    return offset
 end
 
+function parse_is_valid_path(tvb, pinfo, tree, offset)
+   local initoffset = offset
+   local path
+   offset, path = read_string(tvb, pinfo, tree, offset)
+   tree:add(op_is_valid_path, tvb(initoffset, offset - initoffset), path)
+   return offset
+end
+
 function parse_op(tvb, pinfo, tree, offset, op)
    tree:add(op_name_field, tvb(offset, 8), op_table[op])
    offset = offset + 8
@@ -284,6 +296,8 @@ function parse_op(tvb, pinfo, tree, offset, op)
       offset = parse_add_to_store(tvb, pinfo, tree, offset)
    elseif op_table[op] == "SetOptions" then
       offset = parse_set_options(tvb, pinfo, tree, offset)
+   elseif op_table[op] == "IsValidPath" then
+      offset = parse_is_valid_path(tvb, pinfo, tree, offset)
    end
    return offset
 end
